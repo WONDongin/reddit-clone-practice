@@ -1,0 +1,4 @@
+import { FormEvent, useState } from "react";
+import { useRouter } from "next/router";
+import { api } from "../../lib/api";
+export default function NewPost() { const router = useRouter(); const [message, setMessage] = useState(""); const submit = async (event: FormEvent<HTMLFormElement>) => { event.preventDefault(); try { const { data } = await api.post("/api/posts", Object.fromEntries(new FormData(event.currentTarget))); router.push(`/posts/${data.post.slug}`); } catch (error: any) { setMessage(error.response?.data?.message ?? "작성에 실패했습니다."); } }; return <section className="card"><h1>글쓰기</h1><form onSubmit={submit}><input name="subName" defaultValue={typeof router.query.sub === "string" ? router.query.sub : ""} placeholder="커뮤니티 이름" required /><input name="title" placeholder="제목" required /><textarea name="body" placeholder="내용" /><button>게시글 등록</button></form>{message && <p className="error">{message}</p>}</section>; }
