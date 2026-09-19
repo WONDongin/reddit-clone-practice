@@ -28,6 +28,8 @@ export class Sub extends BaseEntity {
   @Column({ unique: true }) name!: string;
   @Column() title!: string;
   @Column({ default: "" }) description!: string;
+  @Column({ nullable: true }) imageUrl?: string;
+  @Column({ nullable: true }) bannerUrl?: string;
   @CreateDateColumn() createdAt!: Date;
   @ManyToOne(() => User, (user) => user.subs, { onDelete: "CASCADE" }) owner!: User;
   @OneToMany(() => Post, (post) => post.sub) posts!: Post[];

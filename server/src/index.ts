@@ -4,6 +4,8 @@ import cookieParser from "cookie-parser";
 import cors from "cors";
 import express, { NextFunction, Request, Response } from "express";
 import jwt from "jsonwebtoken";
+import multer from "multer";
+import path from "path";
 import { AppDataSource } from "./data-source";
 import { Comment, Post, Sub, User, Vote } from "./entities";
 
@@ -15,6 +17,13 @@ const jwtSecret = process.env.JWT_SECRET ?? "development-secret";
 app.use(cors({ origin: process.env.CLIENT_ORIGIN ?? "http://localhost:3000", credentials: true }));
 app.use(express.json());
 app.use(cookieParser());
+app.use("/uploads", express.static(path.join(process.cwd(), "uploads")));
+
+const upload = multer({
+  dest: "uploads/",
+  limits: { fileSize: 5 * 1024 * 1024 },
+  fileFilter: (_req, file, callback) => callback(null, file.mimetype.startsWith("image/")),
+});
 
 const asyncHandler = (fn: (req: AuthRequest, res: Response, next: NextFunction) => Promise<unknown>) =>
   (req: Request, res: Response, next: NextFunction) => Promise.resolve(fn(req as AuthRequest, res, next)).catch(next);
@@ -77,6 +86,29 @@ app.get("/api/subs/:name", asyncHandler(async (req, res) => {
   const sub = await Sub.findOne({ where: { name }, relations: { owner: true } });
   if (!sub) return res.status(404).json({ message: "커뮤니티를 찾을 수 없습니다." });
   res.json({ sub });
+}));
+
+app.post("/api/subs/:name/images", auth, upload.fields([{ name: "image", maxCount: 1 }, { name: "banner", maxCount: 1 }]), asyncHandler(async (req, res) => {
+  const sub = await Sub.findOne({ where: { name: String(req.params.name).toLowerCase() }, relations: { owner: true } });
+  if (!sub) return res.status(404).json({ message: "커뮤니티를 찾을 수 없습니다." });
+  if (sub.owner.id !== req.user!.id) return res.status(403).json({ message: "커뮤니티 생성자만 이미지를 변경할 수 있습니다." });
+  const files = req.files as { [fieldname: string]: Express.Multer.File[] };
+  if (files.image?.[0]) sub.imageUrl = `/uploads/${files.image[0].filename}`;
+  if (files.banner?.[0]) sub.bannerUrl = `/uploads/${files.banner[0].filename}`;
+  if (!files.image?.[0] && !files.banner?.[0]) return res.status(400).json({ message: "업로드할 이미지를 선택하세요." });
+  await sub.save();
+  res.json({ sub });
+}));
+
+app.get("/api/users/:username", asyncHandler(async (req, res) => {
+  const username = String(req.params.username);
+  const user = await User.findOneBy({ username });
+  if (!user) return res.status(404).json({ message: "사용자를 찾을 수 없습니다." });
+  const [posts, comments] = await Promise.all([
+    Post.find({ where: { author: { id: user.id } }, relations: { sub: true }, order: { createdAt: "DESC" } }),
+    Comment.find({ where: { author: { id: user.id } }, relations: { post: true }, order: { createdAt: "DESC" } }),
+  ]);
+  res.json({ user: publicUser(user), posts, comments });
 }));
 
 app.get("/api/posts", asyncHandler(async (req, res) => {
