@@ -2,6 +2,9 @@
 
 > 인프런 **「따라하며 배우는 노드, 리액트 시리즈 - 레딧 사이트 만들기」**를 완강하며, 강의 소스를 직접 작성하고 기능별 동작을 검증한 풀스택 실습 프로젝트입니다.
 
+<BR>
+
+
 ## 1. 프로젝트 소개
 
 레딧(Reddit)을 참고한 커뮤니티 웹 애플리케이션입니다.
@@ -10,6 +13,9 @@ Next.js 프론트엔드, Express 백엔드, PostgreSQL 데이터베이스를 분
 이 저장소는 단순 결과물 보관이 아니라 **클라이언트 요청이 API·인증 미들웨어·ORM·데이터베이스를 거쳐 다시 화면에 반영되는 과정**을 직접 학습하고 정리한 기록입니다.
 
 > 학습 목적의 클론 코딩 프로젝트입니다. 강의에서 제공되는 원본 자료와 라이선스는 강의 정책을 따릅니다.
+
+<BR>
+
 
 ## 2. 학습 목표
 
@@ -20,6 +26,9 @@ Next.js 프론트엔드, Express 백엔드, PostgreSQL 데이터베이스를 분
 - SWR과 Intersection Observer를 활용한 데이터 갱신 및 무한 스크롤 구현
 - Docker 기반 로컬 데이터베이스 환경과 EC2 배포 흐름 경험
 
+<BR>
+
+
 ## 3. 기술 스택
 
 | 구분           | 기술                                                                |
@@ -28,6 +37,9 @@ Next.js 프론트엔드, Express 백엔드, PostgreSQL 데이터베이스를 분
 | Backend        | Node.js, Express, TypeScript, TypeORM                               |
 | Database       | PostgreSQL, pgAdmin                                                 |
 | Infrastructure | Docker, AWS EC2, PM2, Nginx                                         |
+
+<BR>
+
 
 ## 4. 시스템 구조
 
@@ -58,6 +70,9 @@ PostgreSQL
 → 화면 반영
 ```
 
+<BR>
+
+
 ## 5. 주요 기능
 
 | 기능              | 구현 내용                                                  |
@@ -72,6 +87,9 @@ PostgreSQL
 | 무한 스크롤       | SWR Infinite와 Intersection Observer 기반 추가 목록 로딩   |
 | 사용자 페이지     | 작성한 게시글과 댓글 등 활동 정보 조회                     |
 | 배포              | Docker 기반 PostgreSQL 환경과 EC2 배포 흐름 학습           |
+
+<BR>
+
 
 ## 6. 데이터 모델
 
@@ -96,6 +114,9 @@ Comment 1 ─ N Vote
 | `Post`    | 커뮤니티에 속하는 게시글            |
 | `Comment` | 게시글에 작성하는 댓글              |
 | `Vote`    | 게시글 또는 댓글에 대한 사용자 투표 |
+
+<BR>
+
 
 ## 7. 주요 구현 포인트
 
@@ -132,6 +153,9 @@ Comment 1 ─ N Vote
 → 마지막 페이지면 요청 중지
 ```
 
+<BR>
+
+
 ## 8. 테스트 결과
 
 구현 후 정상 흐름뿐 아니라 예외 상황도 함께 확인했습니다.
@@ -145,6 +169,9 @@ Comment 1 ─ N Vote
 | 게시글·댓글 | 작성 후 목록·상세 화면 반영                      | 통과 |
 | 투표        | 생성, 취소, 반대 투표로 변경                     | 통과 |
 | 무한 스크롤 | 다음 페이지 로딩 및 마지막 페이지 요청 중지      | 통과 |
+
+<BR>
+
 
 ## 9. 문제 해결 경험
 
@@ -165,49 +192,12 @@ TypeORM 조회 시 필요한 관계를 명시적으로 설정해 해결했고, �
 마지막 페이지 이후에도 관찰자가 동작해 추가 요청이 발생했습니다.
 
 마지막 응답 데이터의 길이로 종료 여부를 판단하고, 더 가져올 데이터가 없을 때는 요청하지 않도록 처리했습니다.
+                                             |
 
-## 10. 실행 방법
+<BR>
 
-> 실제 소스 디렉터리와 환경 변수 이름에 맞춰 아래 내용을 수정합니다.
 
-### 1) 저장소 복제
-
-```bash
-git clone https://github.com/<YOUR_GITHUB_ID>/reddit-clone-practice.git
-cd reddit-clone-practice
-```
-
-### 2) 데이터베이스 실행
-
-```bash
-docker compose up -d
-```
-
-### 3) 백엔드 실행
-
-```bash
-cd server
-npm install
-npm run dev
-```
-
-### 4) 프론트엔드 실행
-
-```bash
-cd client
-npm install
-npm run dev
-```
-
-## 11. 화면 및 배포 링크
-
-| 구분              | 링크                                                                   |
-| ----------------- | ---------------------------------------------------------------------- |
-| GitHub Repository | [추가 예정](https://github.com/<YOUR_GITHUB_ID>/reddit-clone-practice) |
-| Deployment        | 배포 주소 추가 예정                                                    |
-| Blog Post         | 블로그 정리 글 추가 예정                                               |
-
-## 12. 회고
+## 10. 회고
 
 이번 프로젝트를 통해 화면 구현, API 작성, 데이터베이스 관계 설계, 인증 처리, 배포까지 풀스택 서비스의 전체 흐름을 경험했습니다.
 
@@ -224,7 +214,9 @@ npm run dev
 - 테스트 코드 작성
 - CI/CD 자동 배포
 
-## 13. 참고
+<BR>
+
+## 11. 참고
 
 - [인프런 - 따라하며 배우는 노드, 리액트 시리즈: 레딧 사이트 만들기](https://www.inflearn.com/course/%EB%94%B0%EB%9D%BC%ED%95%98%EB%8A%94-%EB%A0%88%EB%94%A7)
 
