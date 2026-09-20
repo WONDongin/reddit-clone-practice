@@ -3,6 +3,8 @@ import bcrypt from "bcryptjs";
 import cookieParser from "cookie-parser";
 import cors from "cors";
 import express, { NextFunction, Request, Response } from "express";
+import rateLimit from "express-rate-limit";
+import helmet from "helmet";
 import jwt from "jsonwebtoken";
 import multer from "multer";
 import path from "path";
@@ -12,9 +14,22 @@ import { Comment, Post, Sub, User, Vote } from "./entities";
 type AuthRequest = Request & { user?: User };
 const app = express();
 const port = Number(process.env.PORT ?? 4000);
-const jwtSecret = process.env.JWT_SECRET ?? "development-secret";
+const isProduction = process.env.NODE_ENV === "production";
+const jwtSecret = process.env.JWT_SECRET;
+const allowedOrigins = (process.env.CLIENT_ORIGIN ?? "http://localhost:3000").split(",").map((origin) => origin.trim());
 
-app.use(cors({ origin: process.env.CLIENT_ORIGIN ?? "http://localhost:3000", credentials: true }));
+if (!jwtSecret) throw new Error("JWT_SECRET 환경 변수가 필요합니다.");
+if (isProduction && !process.env.CLIENT_ORIGIN) throw new Error("운영 환경에서는 CLIENT_ORIGIN을 설정해야 합니다.");
+
+app.set("trust proxy", 1);
+app.use(helmet({ crossOriginResourcePolicy: false }));
+app.use(cors({
+  origin(origin, callback) {
+    if (!origin || allowedOrigins.includes(origin)) return callback(null, true);
+    return callback(new Error("허용되지 않은 Origin입니다."));
+  },
+  credentials: true,
+}));
 app.use(express.json());
 app.use(cookieParser());
 app.use("/uploads", express.static(path.join(process.cwd(), "uploads")));
@@ -29,42 +44,57 @@ const asyncHandler = (fn: (req: AuthRequest, res: Response, next: NextFunction) 
   (req: Request, res: Response, next: NextFunction) => Promise.resolve(fn(req as AuthRequest, res, next)).catch(next);
 
 const auth = asyncHandler(async (req, res, next) => {
-  const token = req.cookies.token;
-  if (!token) return res.status(401).json({ message: "로그인이 필요합니다." });
-  const payload = jwt.verify(token, jwtSecret) as { userId: number };
-  const user = await User.findOneBy({ id: payload.userId });
-  if (!user) return res.status(401).json({ message: "사용자를 찾을 수 없습니다." });
-  req.user = user;
-  next();
+  try {
+    const token = req.cookies.token;
+    if (!token) return res.status(401).json({ message: "로그인이 필요합니다." });
+    const payload = jwt.verify(token, jwtSecret) as { userId: number };
+    const user = await User.findOneBy({ id: payload.userId });
+    if (!user) return res.status(401).json({ message: "사용자를 찾을 수 없습니다." });
+    req.user = user;
+    next();
+  } catch {
+    return res.status(401).json({ message: "유효하지 않거나 만료된 로그인 정보입니다." });
+  }
 });
 
-const publicUser = (user: User) => ({ id: user.id, username: user.username, email: user.email, createdAt: user.createdAt });
+const publicUser = (user: User, includeEmail = false) => ({
+  id: user.id,
+  username: user.username,
+  ...(includeEmail ? { email: user.email } : {}),
+  createdAt: user.createdAt,
+});
 const slugify = (value: string) => `${value.toLowerCase().trim().replace(/[^a-z0-9가-힣]+/g, "-").replace(/(^-|-$)/g, "")}-${Date.now()}`;
+const authLimiter = rateLimit({ windowMs: 15 * 60 * 1000, limit: 20, standardHeaders: "draft-7", legacyHeaders: false, message: { message: "잠시 후 다시 시도해주세요." } });
 
 app.get("/health", (_req, res) => res.json({ ok: true }));
 
-app.post("/api/auth/register", asyncHandler(async (req, res) => {
-  const { username, email, password } = req.body as Record<string, string>;
+app.post("/api/auth/register", authLimiter, asyncHandler(async (req, res) => {
+  const raw = req.body as Record<string, string>;
+  const username = String(raw.username ?? "").trim();
+  const email = String(raw.email ?? "").trim().toLowerCase();
+  const password = String(raw.password ?? "");
   if (!username || !email || !password) return res.status(400).json({ message: "모든 값을 입력하세요." });
+  if (!/^[a-zA-Z0-9_]{3,20}$/.test(username)) return res.status(400).json({ message: "아이디는 영문·숫자·밑줄 3~20자만 가능합니다." });
+  if (!/^\S+@\S+\.\S+$/.test(email)) return res.status(400).json({ message: "올바른 이메일 형식이 아닙니다." });
   if (password.length < 8) return res.status(400).json({ message: "비밀번호는 8자 이상이어야 합니다." });
   const exists = await User.findOne({ where: [{ username }, { email }] });
   if (exists) return res.status(409).json({ message: "이미 사용 중인 아이디 또는 이메일입니다." });
   const user = User.create({ username, email, password: await bcrypt.hash(password, 12) });
   await user.save();
-  res.status(201).json({ user: publicUser(user) });
+  res.status(201).json({ user: publicUser(user, true) });
 }));
 
-app.post("/api/auth/login", asyncHandler(async (req, res) => {
+app.post("/api/auth/login", authLimiter, asyncHandler(async (req, res) => {
   const { username, password } = req.body as Record<string, string>;
   const user = await User.findOneBy({ username });
   if (!user || !(await bcrypt.compare(password ?? "", user.password))) return res.status(401).json({ message: "아이디 또는 비밀번호가 올바르지 않습니다." });
   const token = jwt.sign({ userId: user.id }, jwtSecret, { expiresIn: "2h" });
-  res.cookie("token", token, { httpOnly: true, sameSite: "lax", secure: process.env.NODE_ENV === "production", maxAge: 1000 * 60 * 60 * 2 });
-  res.json({ user: publicUser(user) });
+  res.cookie("token", token, { httpOnly: true, sameSite: "lax", secure: isProduction, maxAge: 1000 * 60 * 60 * 2, path: "/" });
+  res.json({ user: publicUser(user, true) });
 }));
 
-app.post("/api/auth/logout", (_req, res) => { res.clearCookie("token"); res.status(204).end(); });
-app.get("/api/auth/me", auth, (req: AuthRequest, res) => res.json({ user: publicUser(req.user!) }));
+app.post("/api/auth/logout", (_req, res) => { res.clearCookie("token", { httpOnly: true, sameSite: "lax", secure: isProduction, path: "/" }); res.status(204).end(); });
+app.get("/api/auth/me", auth, (req: AuthRequest, res) => res.json({ user: publicUser(req.user!, true) }));
 
 app.get("/api/subs", asyncHandler(async (_req, res) => {
   const subs = await Sub.find({ relations: { owner: true }, order: { createdAt: "DESC" } });
@@ -75,8 +105,9 @@ app.post("/api/subs", auth, asyncHandler(async (req, res) => {
   const { name, title, description = "" } = req.body as Record<string, string>;
   if (!/^[a-z0-9_]{3,21}$/i.test(name ?? "")) return res.status(400).json({ message: "커뮤니티 이름은 영문·숫자·밑줄 3~21자만 가능합니다." });
   if (!title) return res.status(400).json({ message: "커뮤니티 제목을 입력하세요." });
-  if (await Sub.findOneBy({ name })) return res.status(409).json({ message: "이미 존재하는 커뮤니티입니다." });
-  const sub = Sub.create({ name: name.toLowerCase(), title, description, owner: req.user! });
+  const normalizedName = name.toLowerCase();
+  if (await Sub.findOneBy({ name: normalizedName })) return res.status(409).json({ message: "이미 존재하는 커뮤니티입니다." });
+  const sub = Sub.create({ name: normalizedName, title: title.trim().slice(0, 100), description: description.trim().slice(0, 500), owner: req.user! });
   await sub.save();
   res.status(201).json({ sub });
 }));
@@ -161,6 +192,10 @@ app.post("/api/votes", auth, asyncHandler(async (req, res) => {
 }));
 
 app.use((_req, res) => res.status(404).json({ message: "요청한 API를 찾을 수 없습니다." }));
-app.use((error: Error, _req: Request, res: Response, _next: NextFunction) => { console.error(error); res.status(500).json({ message: "서버 오류가 발생했습니다." }); });
+app.use((error: Error, _req: Request, res: Response, _next: NextFunction) => {
+  if (error instanceof multer.MulterError) return res.status(400).json({ message: "이미지는 5MB 이하만 업로드할 수 있습니다." });
+  console.error(error);
+  res.status(500).json({ message: "서버 오류가 발생했습니다." });
+});
 
 AppDataSource.initialize().then(() => app.listen(port, () => console.log(`API server: http://localhost:${port}`))).catch((error) => { console.error("DB 연결 실패", error); process.exit(1); });

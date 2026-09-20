@@ -3,6 +3,7 @@ import {
   Column,
   CreateDateColumn,
   Entity,
+  Index,
   ManyToOne,
   OneToMany,
   PrimaryGeneratedColumn,
@@ -62,6 +63,8 @@ export class Comment extends BaseEntity {
 }
 
 @Entity("votes")
+@Index("UQ_vote_user_post", ["user", "post"], { unique: true, where: "\"postId\" IS NOT NULL" })
+@Index("UQ_vote_user_comment", ["user", "comment"], { unique: true, where: "\"commentId\" IS NOT NULL" })
 export class Vote extends BaseEntity {
   @PrimaryGeneratedColumn() id!: number;
   @Column({ type: "int" }) value!: 1 | -1;
